@@ -7,10 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadedPathsList = document.getElementById('loadedPathsList');
 
     // Set initial canvas size
-    canvas.width = window.innerWidth * 0.7; // Canvas takes 70% of width now
+    canvas.width = window.innerWidth * 0.7; 
     canvas.height = window.innerHeight * 0.9;
 
-    // Coordinate system settings (initial values, will be updated)
+    // Coordinate system settings
     const axisColor = '#888';
     const axisThickness = 1;
     const minTickSpacing = 50;
@@ -18,20 +18,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const labelOffset = 15;
     let originX = canvas.width / 2;
     let originY = canvas.height / 2;
-    let scale = 20; // Initial pixels per unit, will be auto-adjusted
+    let scale = 20; 
 
     // Store all paths to be drawn
-    // Each item: { id: string, path: Array<{x, y}>, color: string, thickness: number, visible: boolean }
+    // Each item: { id, path, color, thickness, visible, closed }
     const loadedPathData = [];
-    let nextPathId = 0; // For unique IDs
+    let nextPathId = 0; 
 
-    // Predefined colors for paths
     const colors = ['blue', 'red', 'green', 'purple', 'orange', 'darkcyan', 'magenta', 'brown'];
     let colorIndex = 0;
 
-    /**
-     * Helper to get a consistent random color (or cycle through predefined)
-     */
     function getNextColor() {
         const color = colors[colorIndex % colors.length];
         colorIndex++;
@@ -42,69 +38,91 @@ document.addEventListener('DOMContentLoaded', () => {
      * Parses path data from the textarea and updates loadedPathData.
      */
     function parseAndLoadPaths() {
-        const lines = eval(pathInput.value);
+        // Note: Using eval can be unsafe in production, handled here as per original code
+        let lines;
+        try {
+            lines = eval(pathInput.value);
+        } catch (e) {
+            console.error("Input parse error", e);
+            return;
+        }
 
-        loadedPathData.length = 0; // Clear existing paths
-        colorIndex = 0; // Reset color cycle
+        loadedPathData.length = 0; 
+        colorIndex = 0; 
 
         lines.forEach((path, lineIndex) => {
             try {
-                // Basic validation for path format
                 if (Array.isArray(path) && path.every(p => typeof p.x === 'number' && typeof p.y === 'number')) {
                     loadedPathData.push({
                         id: `path-${nextPathId++}`,
                         path: path,
                         color: getNextColor(),
-                        thickness: 3, // Default thickness
-                        visible: true // Default to visible
+                        thickness: 3, 
+                        visible: true,
+                        closed: false // NEW: Initialize closed property to false
                     });
                 } else {
-                    console.warn(`Line ${lineIndex + 1}: Invalid path format. Skipping.`, line);
+                    console.warn(`Line ${lineIndex + 1}: Invalid path format.`);
                 }
             } catch (e) {
-                console.error(`Line ${lineIndex + 1}: JSON parse error. Skipping.`, e);
+                console.error(`Line ${lineIndex + 1}: JSON parse error.`, e);
             }
         });
         updateLoadedPathsList();
-        render(); // Re-render canvas with new paths
+        render(); 
     }
 
     /**
      * Updates the HTML list of loaded paths.
      */
     function updateLoadedPathsList() {
-        loadedPathsList.innerHTML = ''; // Clear previous list items
+        loadedPathsList.innerHTML = ''; 
 
         loadedPathData.forEach(pathItem => {
             const li = document.createElement('li');
+            // MODIFIED: Updated HTML structure to include the "Closed" checkbox
             li.innerHTML = `
-                <label class="path-label">
-                    <input type="checkbox" class="path-visibility-checkbox" data-path-id="${pathItem.id}" ${pathItem.visible ? 'checked' : ''}>
-                    路径 ${pathItem.id.split('-')[1]}
-                    <div class="color-box" style="background-color: ${pathItem.color};"></div>
-                </label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label class="path-label" style="cursor: pointer;">
+                        <input type="checkbox" class="path-visibility-checkbox" data-path-id="${pathItem.id}" ${pathItem.visible ? 'checked' : ''}>
+                        路径 ${pathItem.id.split('-')[1]}
+                    </label>
+                    <div class="color-box" style="background-color: ${pathItem.color}; width: 12px; height: 12px; display:inline-block;"></div>
+                    
+                    <label style="font-size: 0.9em; margin-left: 10px; cursor: pointer; display: flex; align-items: center;">
+                        <input type="checkbox" class="path-closed-checkbox" data-path-id="${pathItem.id}" ${pathItem.closed ? 'checked' : ''}>
+                        <span style="margin-left: 4px;">闭合</span>
+                    </label>
+                </div>
             `;
             loadedPathsList.appendChild(li);
         });
 
-        // Add event listeners for new checkboxes
+        // Event listeners for Visibility checkboxes
         loadedPathsList.querySelectorAll('.path-visibility-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (event) => {
                 const pathId = event.target.dataset.pathId;
-                const isVisible = event.target.checked;
                 const item = loadedPathData.find(p => p.id === pathId);
                 if (item) {
-                    item.visible = isVisible;
-                    render(); // Re-render when visibility changes
+                    item.visible = event.target.checked;
+                    render();
+                }
+            });
+        });
+
+        // NEW: Event listeners for Closed checkboxes
+        loadedPathsList.querySelectorAll('.path-closed-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (event) => {
+                const pathId = event.target.dataset.pathId;
+                const item = loadedPathData.find(p => p.id === pathId);
+                if (item) {
+                    item.closed = event.target.checked; // Update data model
+                    render(); // Re-render
                 }
             });
         });
     }
 
-    /**
-     * Calculates the bounding box of all VISIBLE paths.
-     * @returns {{minX: number, maxX: number, minY: number, maxY: number}}
-     */
     function calculatePathsBoundingBox() {
         const visiblePaths = loadedPathData.filter(item => item.visible);
         if (visiblePaths.length === 0) {
@@ -139,9 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { minX, maxX, minY, maxY };
     }
 
-    /**
-     * Automatically adjusts scale and origin based on paths' bounding box.
-     */
     function autoScaleAndPan() {
         const bbox = calculatePathsBoundingBox();
         const { minX, maxX, minY, maxY } = bbox;
@@ -165,9 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
         originY = canvas.height / 2 + centerY * scale;
     }
 
-    /**
-     * Calculates an appropriate tick interval for the given scale.
-     */
     function getNiceTickInterval(currentScale, minPixelSpacing) {
         const approxTickCount = Math.floor(canvas.width / minPixelSpacing);
         if (approxTickCount === 0) return 1;
@@ -185,9 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return niceSteps[niceSteps.length - 1];
     }
 
-    /**
-     * Helper to determine number of decimal places for a given number.
-     */
     function getPrecision(num) {
         if (num === 0) return 0;
         const s = num.toString();
@@ -197,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return parts.length > 1 ? parts[1].length : 0;
     }
 
-    // Function to draw the coordinate system
     function drawCoordinateSystem() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -222,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tickInterval = getNiceTickInterval(scale, minTickSpacing);
 
-        // Draw X-axis ticks and labels
+        // X-axis ticks
         const startXUnit = Math.floor((-originX / scale) / tickInterval) * tickInterval;
         const endXUnit = Math.ceil(((canvas.width - originX) / scale) / tickInterval) * tickInterval;
 
@@ -238,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Draw Y-axis ticks and labels
+        // Y-axis ticks
         const startYUnit = Math.floor((-(canvas.height - originY) / scale) / tickInterval) * tickInterval;
         const endYUnit = Math.ceil((originY / scale) / tickInterval) * tickInterval;
 
@@ -253,15 +261,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillText(i.toFixed(getPrecision(tickInterval)), originX - labelOffset, y);
             }
         }
-
-        // Draw origin label
         ctx.fillText('0', originX - labelOffset, originY + labelOffset);
     }
 
     /**
      * Draws a path on the canvas and optionally point numbers.
+     * MODIFIED: Added isClosed parameter
      */
-    function drawPath(path, color, thickness, showNumbers) {
+    function drawPath(path, color, thickness, showNumbers, isClosed) {
         if (path.length < 2) return;
 
         ctx.beginPath();
@@ -272,6 +279,12 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i < path.length; i++) {
             ctx.lineTo(originX + path[i].x * scale, originY - path[i].y * scale);
         }
+
+        // NEW: Close the path if requested
+        if (isClosed) {
+            ctx.closePath();
+        }
+
         ctx.stroke();
 
         if (showNumbers) {
@@ -293,7 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Function to draw everything
     function render() {
         autoScaleAndPan();
         drawCoordinateSystem();
@@ -302,24 +314,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadedPathData.forEach(pathItem => {
             if (pathItem.visible) {
-                drawPath(pathItem.path, pathItem.color, pathItem.thickness, showNumbers);
+                // MODIFIED: Pass pathItem.closed to the draw function
+                drawPath(pathItem.path, pathItem.color, pathItem.thickness, showNumbers, pathItem.closed);
             }
         });
     }
 
-    // Initial paths for demonstration (can be edited in the textarea)
-    pathInput.value = `[[{x:10,y:10},{x:20,y:30}],
-[{x:-5,y:0},{x:5,y:-5}]]`;
+    pathInput.value = `[[{x:10,y:10},{x:20,y:30},{x:30,y:10}],
+[{x:-5,y:0},{x:5,y:-5},{x:0,y:-10}]]`;
 
-    // Event Listeners
     applyPathsButton.addEventListener('click', parseAndLoadPaths);
     showPointNumbersCheckbox.addEventListener('change', render);
     window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth * 0.7; // Keep sidebar width
+        canvas.width = window.innerWidth * 0.7; 
         canvas.height = window.innerHeight * 0.9;
         render();
     });
 
-    // Initial rendering after DOM load and example paths are set
-    parseAndLoadPaths(); // Load initial paths from textarea
+    parseAndLoadPaths();
 });
