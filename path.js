@@ -206,71 +206,132 @@ document.addEventListener('DOMContentLoaded', () => {
         return parts.length > 1 ? parts[1].length : 0;
     }
 
+    /**
+     * Helper to clamp a value within a range.
+     * Used to keep labels visible on screen.
+     */
+    function clamp(val, min, max) {
+        return Math.min(Math.max(val, min), max);
+    }
+
+    // Function to draw the coordinate system with Grid and Sticky Labels
     function drawCoordinateSystem() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        ctx.strokeStyle = axisColor;
-        ctx.lineWidth = axisThickness;
+        const tickInterval = getNiceTickInterval(scale, minTickSpacing);
+        const precision = getPrecision(tickInterval);
+
         ctx.font = '10px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#333';
 
-        // Draw X-axis
-        ctx.beginPath();
-        ctx.moveTo(0, originY);
-        ctx.lineTo(canvas.width, originY);
-        ctx.stroke();
+        // Grid styling
+        const gridColor = '#e0e0e0'; // Light gray for normal grid
+        const axisColor = '#666';    // Darker gray for main axes (0,0)
+        const textColor = '#333';
 
-        // Draw Y-axis
-        ctx.beginPath();
-        ctx.moveTo(originX, 0);
-        ctx.lineTo(originX, canvas.height);
-        ctx.stroke();
-
-        const tickInterval = getNiceTickInterval(scale, minTickSpacing);
-
-        // X-axis ticks
+        // 1. Calculate boundaries for drawing
+        // We iterate based on what is currently visible on the screen
         const startXUnit = Math.floor((-originX / scale) / tickInterval) * tickInterval;
         const endXUnit = Math.ceil(((canvas.width - originX) / scale) / tickInterval) * tickInterval;
 
-        for (let i = startXUnit; i <= endXUnit; i += tickInterval) {
-            if (i === 0) continue;
-            const x = originX + i * scale;
-            if (x >= -labelOffset && x <= canvas.width + labelOffset) {
-                ctx.beginPath();
-                ctx.moveTo(x, originY - tickLength);
-                ctx.lineTo(x, originY + tickLength);
-                ctx.stroke();
-                ctx.fillText(i.toFixed(getPrecision(tickInterval)), x, originY + labelOffset);
-            }
-        }
-
-        // Y-axis ticks
         const startYUnit = Math.floor((-(canvas.height - originY) / scale) / tickInterval) * tickInterval;
         const endYUnit = Math.ceil((originY / scale) / tickInterval) * tickInterval;
 
+        // --- Draw Vertical Grid Lines (X values) ---
+        for (let i = startXUnit; i <= endXUnit; i += tickInterval) {
+            const x = originX + i * scale;
+            
+            // Skip drawing if strictly out of bounds (margin of error)
+            if (x < -1 || x > canvas.width + 1) continue;
+
+            const isMainAxis = (Math.abs(i) < tickInterval / 1000); // Check for x=0
+
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            
+            if (isMainAxis) {
+                ctx.strokeStyle = axisColor;
+                ctx.lineWidth = 2; // Thicker for main axis
+            } else {
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = 1;
+            }
+            ctx.stroke();
+        }
+
+        // --- Draw Horizontal Grid Lines (Y values) ---
         for (let i = startYUnit; i <= endYUnit; i += tickInterval) {
-            if (i === 0) continue;
             const y = originY - i * scale;
-            if (y >= -labelOffset && y <= canvas.height + labelOffset) {
-                ctx.beginPath();
-                ctx.moveTo(originX - tickLength, y);
-                ctx.lineTo(originX + tickLength, y);
-                ctx.stroke();
-                ctx.fillText(i.toFixed(getPrecision(tickInterval)), originX - labelOffset, y);
+
+            if (y < -1 || y > canvas.height + 1) continue;
+
+            const isMainAxis = (Math.abs(i) < tickInterval / 1000); // Check for y=0
+
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+
+            if (isMainAxis) {
+                ctx.strokeStyle = axisColor;
+                ctx.lineWidth = 2;
+            } else {
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = 1;
+            }
+            ctx.stroke();
+        }
+
+        // --- Draw Labels (Sticky / Clamped) ---
+        ctx.fillStyle = textColor;
+
+        // Determine where to draw X-axis labels (control Y position)
+        // Ideally at originY. If originY is off-screen, clamp it to bottom or top edge.
+        // We add a padding (e.g., 15px) so it doesn't touch the very edge.
+        let labelY = originY + labelOffset; 
+        if (originY < 0) labelY = 15; // Axis is above, stick label to top
+        if (originY > canvas.height) labelY = canvas.height - 15; // Axis is below, stick label to bottom
+        
+        // Draw X Labels
+        for (let i = startXUnit; i <= endXUnit; i += tickInterval) {
+            if (Math.abs(i) < tickInterval / 1000) continue; // Don't draw '0' yet, we do it separately or let corner handle it
+            const x = originX + i * scale;
+            if (x >= 0 && x <= canvas.width) {
+                // Add a small background rect for legibility if overriding grid lines? 
+                // For simplicity, just text:
+                ctx.fillText(i.toFixed(precision), x, labelY);
             }
         }
-        ctx.fillText('0', originX - labelOffset, originY + labelOffset);
+
+        // Determine where to draw Y-axis labels (control X position)
+        let labelX = originX - labelOffset;
+        if (originX < 0) labelX = 15; // Axis is left, stick label to left
+        if (originX > canvas.width) labelX = canvas.width - 25; // Axis is right, stick label to right
+
+        // Draw Y Labels
+        ctx.textAlign = (labelX < 30) ? 'left' : 'right'; // Adjust alignment based on side
+        
+        for (let i = startYUnit; i <= endYUnit; i += tickInterval) {
+             if (Math.abs(i) < tickInterval / 1000) continue;
+             const y = originY - i * scale;
+             if (y >= 0 && y <= canvas.height) {
+                 ctx.fillText(i.toFixed(precision), labelX, y);
+             }
+        }
+        
+        // Optionally draw '0' at the intersection of the clamped positions
+        // ctx.fillText('0', labelX, labelY); 
     }
 
     /**
      * Draws a path on the canvas and optionally point numbers.
-     * MODIFIED: Added isClosed parameter
+     * MODIFIED: Smart label positioning to avoid line overlap.
      */
     function drawPath(path, color, thickness, showNumbers, isClosed) {
         if (path.length < 2) return;
 
+        // --- 1. Draw the Lines ---
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = thickness;
@@ -279,29 +340,106 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i < path.length; i++) {
             ctx.lineTo(originX + path[i].x * scale, originY - path[i].y * scale);
         }
-
-        // NEW: Close the path if requested
         if (isClosed) {
             ctx.closePath();
         }
-
         ctx.stroke();
 
+        // --- 2. Draw Points and Smart Labels ---
         if (showNumbers) {
             ctx.fillStyle = color;
-            ctx.font = '8px Arial';
+            ctx.font = '16px Arial'; // Slightly larger font
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            path.forEach((point, index) => {
-                const px = originX + point.x * scale;
-                const py = originY - point.y * scale;
+            // Helper to get screen coordinates
+            const getScreenPoint = (pt) => ({
+                x: originX + pt.x * scale,
+                y: originY - pt.y * scale
+            });
 
+            // Helper to normalize a vector
+            const normalize = (v) => {
+                const len = Math.sqrt(v.x * v.x + v.y * v.y);
+                if (len === 0) return { x: 0, y: 0 };
+                return { x: v.x / len, y: v.y / len };
+            };
+
+            path.forEach((point, index) => {
+                const curr = getScreenPoint(point);
+
+                // Draw the point circle
                 ctx.beginPath();
-                ctx.arc(px, py, thickness / 2 + 1, 0, Math.PI * 2);
+                ctx.arc(curr.x, curr.y, thickness / 2 + 2, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.fillText(index + 1, px, py - (thickness / 2 + 5));
+                // --- Calculate Smart Label Position ---
+                
+                let dir = { x: 0, y: -1 }; // Default direction (up)
+                
+                // Determine Previous and Next point indices
+                let prevIdx = -1;
+                let nextIdx = -1;
+
+                if (isClosed) {
+                    // Wrap around logic
+                    prevIdx = (index - 1 + path.length) % path.length;
+                    nextIdx = (index + 1) % path.length;
+                } else {
+                    // Standard boundaries
+                    if (index > 0) prevIdx = index - 1;
+                    if (index < path.length - 1) nextIdx = index + 1;
+                }
+
+                // Vector calculation
+                let vPrev = { x: 0, y: 0 };
+                let vNext = { x: 0, y: 0 };
+                let hasPrev = false;
+                let hasNext = false;
+
+                if (prevIdx !== -1) {
+                    const pPrev = getScreenPoint(path[prevIdx]);
+                    vPrev = normalize({ x: pPrev.x - curr.x, y: pPrev.y - curr.y });
+                    hasPrev = true;
+                }
+
+                if (nextIdx !== -1) {
+                    const pNext = getScreenPoint(path[nextIdx]);
+                    vNext = normalize({ x: pNext.x - curr.x, y: pNext.y - curr.y });
+                    hasNext = true;
+                }
+
+                if (hasPrev && hasNext) {
+                    // Middle point (or closed path endpoint): Calculate angle bisector
+                    // Summing unit vectors gives the vector exactly in the middle of the INTERNAL angle
+                    let sumX = vPrev.x + vNext.x;
+                    let sumY = vPrev.y + vNext.y;
+                    
+                    // If sum is effectively 0, points are collinear (180 deg). 
+                    // Choose a perpendicular direction (e.g., rotate vPrev 90 deg)
+                    if (Math.abs(sumX) < 0.001 && Math.abs(sumY) < 0.001) {
+                        dir = { x: -vPrev.y, y: vPrev.x }; 
+                    } else {
+                        // The sum points "inward". We want "outward", so negate it.
+                        const bisector = normalize({ x: sumX, y: sumY });
+                        dir = { x: -bisector.x, y: -bisector.y };
+                    }
+                } else if (hasPrev) {
+                    // End point (Open path): Direction is away from previous
+                    // vPrev points to previous, so -vPrev points away
+                    dir = { x: -vPrev.x, y: -vPrev.y };
+                } else if (hasNext) {
+                    // Start point (Open path): Direction is away from next
+                    // vNext points to next, so -vNext points away
+                    dir = { x: -vNext.x, y: -vNext.y };
+                }
+
+                // Apply offset
+                const offsetDistance = 15; // Distance from point center to text center
+                const labelX = curr.x + dir.x * offsetDistance;
+                const labelY = curr.y + dir.y * offsetDistance;
+
+                ctx.fillText(index + 1, labelX, labelY);
             });
         }
     }
