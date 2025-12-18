@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <!-- Icon -->
@@ -15,37 +16,51 @@
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
         }
+
         .sidebar {
-            width: 300px; /* Fixed width for the sidebar */
+            width: 300px;
+            /* Fixed width for the sidebar */
             background-color: #e0e0e0;
             padding: 15px;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
             display: flex;
             flex-direction: column;
-            gap: 15px; /* Spacing between sections */
-            overflow-y: auto; /* Allow scrolling for long lists/textareas */
+            gap: 15px;
+            /* Spacing between sections */
+            overflow-y: auto;
+            /* Allow scrolling for long lists/textareas */
         }
+
         .main-content {
-            flex-grow: 1; /* Canvas takes remaining space */
+            flex-grow: 1;
+            /* Canvas takes remaining space */
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
+
         }
+
         h2 {
             margin-top: 0;
             margin-bottom: 10px;
             color: #333;
             font-size: 1.2em;
         }
+
         textarea {
-            width: calc(100% - 10px); /* Adjust width for padding */
+            width: calc(100% - 10px);
+            /* Adjust width for padding */
             min-height: 150px;
             padding: 5px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            font-family: 'Consolas', monospace; /* Monospace for code-like input */
-            resize: vertical; /* Allow vertical resizing */
+            font-family: 'Consolas', monospace;
+            /* Monospace for code-like input */
+            resize: vertical;
+            /* Allow vertical resizing */
         }
+
         button {
             padding: 8px 15px;
             background-color: #007bff;
@@ -55,43 +70,52 @@
             cursor: pointer;
             font-size: 1em;
         }
+
         button:hover {
             background-color: #0056b3;
         }
+
         .control-group {
             border: 1px solid #ccc;
             padding: 10px;
             border-radius: 5px;
             background-color: #f8f8f8;
         }
+
         .path-list {
             list-style: none;
             padding: 0;
             margin: 0;
-            max-height: 300px; /* Max height for the list, allows scrolling */
+            max-height: 300px;
+            /* Max height for the list, allows scrolling */
             overflow-y: auto;
             border: 1px solid #ddd;
             border-radius: 4px;
             background-color: #fff;
         }
+
         .path-list li {
             padding: 8px;
             border-bottom: 1px solid #eee;
             display: flex;
             align-items: center;
         }
+
         .path-list li:last-child {
             border-bottom: none;
         }
+
         .path-list input[type="checkbox"] {
             margin-right: 8px;
         }
+
         .path-list .path-label {
             flex-grow: 1;
             display: flex;
             align-items: center;
             font-size: 0.9em;
         }
+
         .path-list .color-box {
             width: 15px;
             height: 15px;
@@ -99,12 +123,27 @@
             margin-left: 5px;
             margin-right: 5px;
         }
+
         canvas {
             border: 1px solid #ccc;
             background-color: #fff;
         }
+
+        .info-bar {
+            height: 30px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #333;
+            box-sizing: border-box;
+        }
     </style>
 </head>
+
 <body>
     <div class="sidebar">
         <div class="control-group">
@@ -131,9 +170,11 @@
     </div>
 
     <div class="main-content">
+    <div id="infoBar" class="info-bar">鼠标悬停在点上查看详情</div>
         <canvas id="pathCanvas"></canvas>
     </div>
 
     <script src="path.js"></script>
 </body>
+
 </html>

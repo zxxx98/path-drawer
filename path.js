@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store all paths to be drawn
     // Each item: { id, path, color, thickness, visible, closed }
     const loadedPathData = [];
+    let hoveredPoint = null; // NEW: 存储当前鼠标悬停的点信息 { pathId, index, x, y }
+    const infoBar = document.getElementById('infoBar'); // NEW: 获取信息栏元素
     let nextPathId = 0; 
 
     const colors = ['blue', 'red', 'green', 'purple', 'orange', 'darkcyan', 'magenta', 'brown'];
@@ -470,4 +472,67 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     parseAndLoadPaths();
+
+    // NEW: Mouse Interaction for Hovering Points
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        let found = null;
+        const hoverThreshold = 8; // 鼠标靠近点 8 像素以内算选中
+
+        // 逆序遍历，这样重叠时优先选中最上层的（后绘制的）
+        for (let i = loadedPathData.length - 1; i >= 0; i--) {
+            const item = loadedPathData[i];
+            if (!item.visible) continue;
+
+            for (let j = 0; j < item.path.length; j++) {
+                const pt = item.path[j];
+                // 计算屏幕坐标
+                const screenX = originX + pt.x * scale;
+                const screenY = originY - pt.y * scale;
+
+                // 计算距离
+                const dist = Math.hypot(mouseX - screenX, mouseY - screenY);
+
+                if (dist < hoverThreshold) {
+                    found = {
+                        pathId: item.id,
+                        index: j,
+                        x: pt.x,
+                        y: pt.y,
+                        color: item.color
+                    };
+                    break; // 找到一个点后停止检查当前路径
+                }
+            }
+            if (found) break; // 找到后停止所有检查
+        }
+
+        // 状态更新与重绘判断
+        const prevHover = hoveredPoint;
+        hoveredPoint = found;
+
+        // 更新顶部信息栏
+        if (hoveredPoint) {
+            infoBar.textContent = `路径: ${hoveredPoint.pathId.split('-')[1]} | 序号: ${hoveredPoint.index + 1} | 坐标: (x: ${hoveredPoint.x}, y: ${hoveredPoint.y})`;
+            infoBar.style.backgroundColor = '#e6f7ff'; // 淡淡的蓝色背景表示激活
+            canvas.style.cursor = 'pointer';
+        } else {
+            infoBar.textContent = '鼠标悬停在点上查看详情';
+            infoBar.style.backgroundColor = '#f0f0f0';
+            canvas.style.cursor = 'default';
+        }
+
+        // 只有当悬停状态发生变化时才重绘（避免性能浪费）
+        // 简单的比较对象引用是不够的，这里简单判断 pathId 和 index
+        const isChange = (prevHover && !found) || 
+                         (!prevHover && found) || 
+                         (prevHover && found && (prevHover.pathId !== found.pathId || prevHover.index !== found.index));
+
+        if (isChange) {
+            render();
+        }
+    });
 });
